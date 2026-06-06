@@ -1,0 +1,65 @@
+// Free-list heap allocator.
+// Block layout: [size, next, data...]
+//   size = number of data words (NOT counting 2-word header)
+//   next = pointer to next free block (0 = null)
+// Heap: RAM[2048..16383]
+
+class Memory {
+    static Array mem;
+    static int   freeList;
+
+    function void init() {
+        let mem      = 0;         // base pointer for raw RAM access
+        let freeList = 2048;
+        let mem[2048] = 14334;   // size: 16383 - 2048 - 1 (header)
+        let mem[2049] = 0;       // next: null
+        return;
+    }
+
+    function int peek(int address) {
+        return mem[address];
+    }
+
+    function void poke(int address, int value) {
+        let mem[address] = value;
+        return;
+    }
+
+    function Array alloc(int size) {
+        var int cur, prev, next;
+        let prev = 0;
+        let cur  = freeList;
+
+        // first-fit search
+        while ((~(cur = 0)) & (mem[cur] < size)) {
+            let prev = cur;
+            let cur  = mem[cur + 1];
+        }
+        if (cur = 0) { do Sys.error(6); return -1; }
+
+        // split block if remainder would be meaningful (>=3 words: 2 header + 1 data)
+        if (mem[cur] > (size + 2)) {
+            let next          = cur + 2 + size;
+            let mem[next]     = mem[cur] - size - 2;
+            let mem[next + 1] = mem[cur + 1];
+            if (prev = 0) { let freeList = next; }
+            else          { let mem[prev + 1] = next; }
+        } else {
+            // use entire block
+            if (prev = 0) { let freeList = mem[cur + 1]; }
+            else          { let mem[prev + 1] = mem[cur + 1]; }
+        }
+
+        let mem[cur]     = size;
+        let mem[cur + 1] = 0;
+        return cur + 2;
+    }
+
+    function void deAlloc(Array o) {
+        var int block;
+        let block          = o - 2;
+        let mem[block + 1] = freeList;
+        let freeList       = block;
+        return;
+    }
+}

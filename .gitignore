@@ -1,0 +1,8 @@
+# build artifacts
+dist/
+*.pyc
+__pycache__/
+
+# generated toolchain output (sources are the .jack / .asm; these are derived)
+projects/**/build.asm
+projects/**/build.hack

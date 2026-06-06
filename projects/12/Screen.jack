@@ -1,0 +1,146 @@
+// Screen: 512 wide × 256 tall, mapped to RAM[16384..24575].
+// Each row = 32 words; bit k of word w = pixel at column w*16+k.
+
+class Screen {
+    static boolean black;
+    static Array   screen;
+    static Array   pow2;
+
+    function void init() {
+        var int i;
+        let black  = true;
+        let screen = 16384;
+        let pow2   = Array.new(16);
+        let pow2[0] = 1;
+        let i = 1;
+        while (i < 16) {
+            let pow2[i] = pow2[i - 1] + pow2[i - 1];
+            let i = i + 1;
+        }
+        do Screen.clearScreen();
+        return;
+    }
+
+    function void clearScreen() {
+        var int i;
+        let i = 0;
+        while (i < 8192) {
+            let screen[i] = 0;
+            let i = i + 1;
+        }
+        return;
+    }
+
+    function void setColor(boolean b) { let black = b; return; }
+
+    function void drawPixel(int x, int y) {
+        var int addr, bit;
+        if ((x < 0) | (x > 511) | (y < 0) | (y > 255)) { do Sys.error(7); }
+        let addr = (y * 32) + (x / 16);
+        let bit  = pow2[x & 15];
+        if (black) { let screen[addr] = screen[addr] | bit;  }
+        else       { let screen[addr] = screen[addr] & (~bit); }
+        return;
+    }
+
+    function void drawLine(int x1, int y1, int x2, int y2) {
+        var int dx, dy, a, b, diff;
+        var int sx, sy;
+        let dx   = x2 - x1;
+        let dy   = y2 - y1;
+        let sx   = 1; if (dx < 0) { let sx = -1; let dx = -dx; }
+        let sy   = 1; if (dy < 0) { let sy = -1; let dy = -dy; }
+        let a    = x1;
+        let b    = y1;
+        let diff = 0;
+
+        if (dy = 0) {                           // horizontal
+            do Screen.drawHLine(x1, x2, y1);
+            return;
+        }
+        if (dx = 0) {                           // vertical
+            do Screen.drawVLine(x1, y1, y2);
+            return;
+        }
+
+        // Bresenham
+        while ((~(a = x2)) | (~(b = y2))) {
+            do Screen.drawPixel(a, b);
+            if (diff < 0) {
+                let a    = a + sx;
+                let diff = diff + dy;
+            } else {
+                let b    = b + sy;
+                let diff = diff - dx;
+            }
+        }
+        do Screen.drawPixel(a, b);
+        return;
+    }
+
+    // Optimised horizontal run using full-word writes where possible
+    function void drawHLine(int x1, int x2, int y) {
+        var int lo, hi, addr, mask, i;
+        if (x1 > x2) { let i = x1; let x1 = x2; let x2 = i; }
+        let addr = y * 32;
+        let lo   = x1 / 16;
+        let hi   = x2 / 16;
+        if (lo = hi) {
+            // Same word: build a mask covering bits x1%16..x2%16
+            let i = x1 & 15;
+            while (~(i > (x2 & 15))) {
+                let mask = mask | pow2[i];
+                let i    = i + 1;
+            }
+            if (black) { let screen[addr + lo] = screen[addr + lo] | mask; }
+            else       { let screen[addr + lo] = screen[addr + lo] & (~mask); }
+            return;
+        }
+        // Left partial word
+        let i = x1 & 15;
+        let mask = 0;
+        while (i < 16) { let mask = mask | pow2[i]; let i = i + 1; }
+        if (black) { let screen[addr + lo] = screen[addr + lo] | mask; }
+        else       { let screen[addr + lo] = screen[addr + lo] & (~mask); }
+        // Full words in between
+        let lo = lo + 1;
+        while (lo < hi) {
+            if (black) { let screen[addr + lo] = -1; }
+            else       { let screen[addr + lo] = 0;  }
+            let lo = lo + 1;
+        }
+        // Right partial word
+        let i = 0; let mask = 0;
+        while (~(i > (x2 & 15))) { let mask = mask | pow2[i]; let i = i + 1; }
+        if (black) { let screen[addr + hi] = screen[addr + hi] | mask; }
+        else       { let screen[addr + hi] = screen[addr + hi] & (~mask); }
+        return;
+    }
+
+    function void drawVLine(int x, int y1, int y2) {
+        var int i;
+        if (y1 > y2) { let i = y1; let y1 = y2; let y2 = i; }
+        while (~(y1 > y2)) { do Screen.drawPixel(x, y1); let y1 = y1 + 1; }
+        return;
+    }
+
+    function void drawRectangle(int x1, int y1, int x2, int y2) {
+        while (~(y1 > y2)) {
+            do Screen.drawHLine(x1, x2, y1);
+            let y1 = y1 + 1;
+        }
+        return;
+    }
+
+    function void drawCircle(int cx, int cy, int r) {
+        var int dy, half;
+        if ((r < 0) | (r > 181)) { do Sys.error(13); }
+        let dy = -r;
+        while (~(dy > r)) {
+            let half = Math.sqrt((r * r) - (dy * dy));
+            do Screen.drawHLine(cx - half, cx + half, cy + dy);
+            let dy = dy + 1;
+        }
+        return;
+    }
+}

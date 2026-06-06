@@ -1,0 +1,81 @@
+class String {
+    field Array buf;
+    field int   len;
+    field int   cap;
+
+    constructor String new(int maxLen) {
+        if (maxLen < 0) { do Sys.error(14); }
+        let cap = maxLen;
+        if (maxLen = 0) { let maxLen = 1; }  // avoid zero-length Array.new
+        let buf = Array.new(maxLen);
+        let len = 0;
+        return this;
+    }
+
+    method void dispose() {
+        do buf.dispose();
+        do Memory.deAlloc(this);
+        return;
+    }
+
+    method int length() { return len; }
+
+    method char charAt(int j) {
+        if ((j < 0) | (~(j < len))) { do Sys.error(15); }
+        return buf[j];
+    }
+
+    method void setCharAt(int j, char c) {
+        if ((j < 0) | (~(j < len))) { do Sys.error(16); }
+        let buf[j] = c;
+        return;
+    }
+
+    method String appendChar(char c) {
+        if (len = cap) { do Sys.error(17); }
+        let buf[len] = c;
+        let len = len + 1;
+        return this;
+    }
+
+    method void eraseLastChar() {
+        if (len = 0) { do Sys.error(18); }
+        let len = len - 1;
+        return;
+    }
+
+    method int intValue() {
+        var int val, i, d;
+        var boolean neg;
+        let val = 0;
+        let i   = 0;
+        let neg = false;
+        if ((len > 0) & (buf[0] = 45)) { let neg = true; let i = 1; }
+        while (i < len) {
+            let d   = buf[i] - 48;
+            let val = (val * 10) + d;
+            let i   = i + 1;
+        }
+        if (neg) { return -val; }
+        return val;
+    }
+
+    method void setInt(int n) {
+        let len = 0;
+        if (n < 0) { do appendChar(45); let n = -n; }  // '-'
+        do setIntRec(n);
+        return;
+    }
+
+    method void setIntRec(int n) {
+        var int q;
+        let q = n / 10;
+        if (n > 9) { do setIntRec(q); }
+        do appendChar(48 + (n - (q * 10)));
+        return;
+    }
+
+    function char backSpace()   { return 129; }
+    function char doubleQuote() { return 34;  }
+    function char newLine()     { return 128; }
+}

@@ -1,0 +1,82 @@
+class Math {
+    static Array pow2;   // pow2[i] = 2^i for i in 0..15
+
+    function void init() {
+        var int i;
+        let pow2    = Array.new(16);
+        let pow2[0] = 1;
+        let i = 1;
+        while (i < 16) {
+            let pow2[i] = pow2[i - 1] + pow2[i - 1];
+            let i = i + 1;
+        }
+        return;
+    }
+
+    function int abs(int x) {
+        if (x < 0) { return -x; }
+        return x;
+    }
+
+    function int multiply(int x, int y) {
+        var int sum, shifted, i;
+        let sum     = 0;
+        let shifted = x;
+        let i       = 0;
+        while (i < 16) {
+            if (~((y & pow2[i]) = 0)) {
+                let sum = sum + shifted;
+            }
+            let shifted = shifted + shifted;
+            let i = i + 1;
+        }
+        return sum;
+    }
+
+    function int divide(int x, int y) {
+        var boolean neg;
+        var int result;
+        if (y = 0) { do Sys.error(3); }
+        let neg    = ((x < 0) & (y > 0)) | ((x > 0) & (y < 0));
+        let result = Math.divPos(Math.abs(x), Math.abs(y));
+        if (neg) { return -result; }
+        return result;
+    }
+
+    // Recursive positive-integer division; y < 0 detects overflow.
+    function int divPos(int x, int y) {
+        var int q, r;
+        if ((y > x) | (y < 0)) { return 0; }
+        let q = Math.divPos(x, y + y);
+        let r = x - (Math.multiply(q + q, y));
+        if (r < y) { return q + q; }
+        return q + q + 1;
+    }
+
+    function int min(int a, int b) {
+        if (a < b) { return a; }
+        return b;
+    }
+
+    function int max(int a, int b) {
+        if (a > b) { return a; }
+        return b;
+    }
+
+    function int sqrt(int x) {
+        var int y, j, t;
+        if (x < 0) { do Sys.error(4); }
+        let y = 0;
+        let j = 7;
+        while (~(j < 0)) {
+            let t = y + pow2[j];
+            let t = t * t;
+            // t > 0 guards against overflow wrapping to negative
+            if ((~(t > x)) & (t > 0)) {
+                let y = y + pow2[j];
+            }
+            let j = j - 1;
+        }
+        return y;
+    }
+}

@@ -1,0 +1,402 @@
+// Tetris for the Hack computer.
+//
+// Screen layout (512x256):
+//   Board:   x=20..119, y=28..227  (10x20 cells, each 10x10 px, 1px gap)
+//   Border:  x=19..120, y=27..228
+//   Sidebar: x=130..200  (NEXT preview, score, level, lines)
+//
+// Piece shapes: encoded as 16-bit bitmask of a 4x4 grid.
+//   bit k = (k/4, k%4) cell.  bit 0 = top-left.
+//
+// Controls: left(130) right(132) up=rotate(131) down=soft-drop(133) space=hard-drop(32)
+
+class Tetris {
+    field Array  board;      // 10x20 = 200 cells, board[r*10+c]: 0=empty
+    field Array  shapes;     // 7 pieces x 4 rotations = 28 bitmasks
+    field Array  pow2;       // pow2[i] = 2^i
+
+    field int    pieceType, pieceRot, pieceX, pieceY;
+    field int    nextType;
+    field int    randState;
+
+    field int    score, level, lines;
+    field boolean gameOver;
+
+    field int    dropDelay;  // loop ticks between automatic drops
+    field int    dropTimer;
+
+    constructor Tetris new() {
+        var int i;
+        let board  = Array.new(200);
+        let shapes = Array.new(28);
+        let pow2   = Array.new(16);
+
+        // --- pow2 table ---
+        let pow2[0] = 1;
+        let i = 1;
+        while (i < 16) {
+            let pow2[i] = pow2[i - 1] + pow2[i - 1];
+            let i = i + 1;
+        }
+
+        // --- piece bitmasks (bit k = row k/4, col k%4) ---
+        // I-piece  (shapes[0..3])
+        let shapes[0]  = 240;    // rot0: row1 all cols
+        let shapes[1]  = 17476;  // rot1: col2 all rows
+        let shapes[2]  = 3840;   // rot2: row2 all cols
+        let shapes[3]  = 8738;   // rot3: col1 all rows
+        // O-piece  (shapes[4..7])
+        let shapes[4]  = 1632;   let shapes[5]  = 1632;
+        let shapes[6]  = 1632;   let shapes[7]  = 1632;
+        // T-piece  (shapes[8..11])
+        let shapes[8]  = 624;    // row1 cols0-2, (2,1)
+        let shapes[9]  = 610;    // (0,1)(1,1)(1,2)(2,1)
+        let shapes[10] = 1824;   // (1,1)(2,0)(2,1)(2,2)
+        let shapes[11] = 562;    // (0,1)(1,0)(1,1)(2,1)
+        // S-piece  (shapes[12..15])
+        let shapes[12] = 864;    let shapes[13] = 8976;
+        let shapes[14] = 864;    let shapes[15] = 8976;
+        // Z-piece  (shapes[16..19])
+        let shapes[16] = 1584;   let shapes[17] = 4896;
+        let shapes[18] = 1584;   let shapes[19] = 4896;
+        // J-piece  (shapes[20..23])
+        let shapes[20] = 1808;   let shapes[21] = 4400;
+        let shapes[22] = 1136;   let shapes[23] = 802;
+        // L-piece  (shapes[24..27])
+        let shapes[24] = 1856;   let shapes[25] = 12560;
+        let shapes[26] = 368;    let shapes[27] = 547;
+
+        // --- init board ---
+        let i = 0;
+        while (i < 200) { let board[i] = 0; let i = i + 1; }
+
+        let randState = 0;
+        let nextType  = 0;
+        let score     = 0;
+        let level     = 1;
+        let lines     = 0;
+        let gameOver  = false;
+        let dropDelay = 20;
+        let dropTimer = 0;
+
+        do spawnPiece();
+        return this;
+    }
+
+    // ── game loop ─────────────────────────────────────────────────────────────
+
+    method void run() {
+        var int key, prevKey;
+        do drawBorder();
+        do redrawAll();
+        let prevKey = 0;
+
+        while (~gameOver) {
+            let key = Keyboard.keyPressed();
+            if (~(key = prevKey)) {
+                do handleInput(key);
+                let prevKey = key;
+            }
+            let dropTimer = dropTimer + 1;
+            if (dropTimer > dropDelay) {
+                let dropTimer = 0;
+                do tick();
+            }
+            do Sys.wait(10);
+        }
+
+        do Output.moveCursor(11, 22);
+        do Output.printString("GAME OVER");
+        do Output.moveCursor(12, 19);
+        do Output.printString("Final score: ");
+        do Output.printInt(score);
+        return;
+    }
+
+    // ── piece lifecycle ───────────────────────────────────────────────────────
+
+    method void spawnPiece() {
+        let pieceType = nextType;
+        let pieceRot  = 0;
+        let pieceX    = 3;
+        let pieceY    = -1;
+
+        // advance pseudo-random sequence (step by 3 mod 7 → covers all 7 types)
+        let randState = randState + 3;
+        if (randState > 6) { let randState = randState - 7; }
+        let nextType = randState;
+
+        if (~canMove(pieceType, 0, 3, -1)) { let gameOver = true; }
+        return;
+    }
+
+    method boolean canMove(int t, int r, int bx, int by) {
+        var int row, col, sh, bit, br, bc;
+        let sh  = shapes[(t * 4) + r];
+        let row = 0;
+        while (row < 4) {
+            let col = 0;
+            while (col < 4) {
+                let bit = pow2[(row * 4) + col];
+                if (~((sh & bit) = 0)) {
+                    let br = by + row;
+                    let bc = bx + col;
+                    if ((bc < 0) | (bc > 9)) { return false; }
+                    if (br > 19)             { return false; }
+                    if (br > -1) {
+                        if (~(board[(br * 10) + bc] = 0)) { return false; }
+                    }
+                }
+                let col = col + 1;
+            }
+            let row = row + 1;
+        }
+        return true;
+    }
+
+    method void lockPiece() {
+        var int row, col, sh, bit;
+        let sh  = shapes[(pieceType * 4) + pieceRot];
+        let row = 0;
+        while (row < 4) {
+            let col = 0;
+            while (col < 4) {
+                let bit = pow2[(row * 4) + col];
+                if (~((sh & bit) = 0)) {
+                    if ((pieceY + row) > -1) {
+                        let board[((pieceY + row) * 10) + (pieceX + col)] = 1;
+                    }
+                }
+                let col = col + 1;
+            }
+            let row = row + 1;
+        }
+        do clearLines();
+        do spawnPiece();
+        do redrawAll();
+        return;
+    }
+
+    method void clearLines() {
+        var int r, c, dest, cleared;
+        var boolean full;
+        let cleared = 0;
+        let r = 19;
+        while (r > -1) {
+            let full = true;
+            let c = 0;
+            while (c < 10) {
+                if (board[(r * 10) + c] = 0) { let full = false; }
+                let c = c + 1;
+            }
+            if (full) {
+                // shift everything above r down by one row
+                let dest = r;
+                while (dest > 0) {
+                    let c = 0;
+                    while (c < 10) {
+                        let board[(dest * 10) + c] = board[((dest - 1) * 10) + c];
+                        let c = c + 1;
+                    }
+                    let dest = dest - 1;
+                }
+                let c = 0;
+                while (c < 10) { let board[c] = 0; let c = c + 1; }
+                let cleared = cleared + 1;
+                // don't advance r; recheck same row (now contains shifted content)
+            } else {
+                let r = r - 1;
+            }
+        }
+
+        let lines = lines + cleared;
+        if (cleared = 1) { let score = score + (100 * level); }
+        if (cleared = 2) { let score = score + (300 * level); }
+        if (cleared = 3) { let score = score + (500 * level); }
+        if (cleared = 4) { let score = score + (800 * level); }
+
+        let level = (lines / 10) + 1;
+        if (level > 15) { let level = 15; }
+        let dropDelay = 20 - level;
+        if (dropDelay < 3) { let dropDelay = 3; }
+        return;
+    }
+
+    // ── input ─────────────────────────────────────────────────────────────────
+
+    method void handleInput(int key) {
+        var int newRot;
+        if (key = 130) {                                          // ← move left
+            if (canMove(pieceType, pieceRot, pieceX - 1, pieceY)) {
+                do drawPiece(false);
+                let pieceX = pieceX - 1;
+                do drawPiece(true);
+            }
+        }
+        if (key = 132) {                                          // → move right
+            if (canMove(pieceType, pieceRot, pieceX + 1, pieceY)) {
+                do drawPiece(false);
+                let pieceX = pieceX + 1;
+                do drawPiece(true);
+            }
+        }
+        if (key = 131) {                                          // ↑ rotate
+            let newRot = pieceRot + 1;
+            if (newRot > 3) { let newRot = 0; }
+            if (canMove(pieceType, newRot, pieceX, pieceY)) {
+                do drawPiece(false);
+                let pieceRot = newRot;
+                do drawPiece(true);
+            }
+        }
+        if (key = 133) {                                          // ↓ soft drop
+            do tick();
+            let dropTimer = 0;
+        }
+        if (key = 32) {                                           // space hard drop
+            do drawPiece(false);
+            while (canMove(pieceType, pieceRot, pieceX, pieceY + 1)) {
+                let pieceY = pieceY + 1;
+            }
+            do lockPiece();
+        }
+        return;
+    }
+
+    method void tick() {
+        if (canMove(pieceType, pieceRot, pieceX, pieceY + 1)) {
+            do drawPiece(false);
+            let pieceY = pieceY + 1;
+            do drawPiece(true);
+        } else {
+            do lockPiece();
+        }
+        return;
+    }
+
+    // ── drawing ───────────────────────────────────────────────────────────────
+
+    method void redrawAll() {
+        do drawBoard();
+        do drawPiece(true);
+        do drawSidebar();
+        return;
+    }
+
+    method void drawBorder() {
+        do Screen.setColor(true);
+        do Screen.drawLine(19, 27, 120, 27);    // top
+        do Screen.drawLine(19, 228, 120, 228);  // bottom
+        do Screen.drawLine(19, 27, 19, 228);    // left
+        do Screen.drawLine(120, 27, 120, 228);  // right
+        return;
+    }
+
+    method void drawBoard() {
+        var int r, c;
+        let r = 0;
+        while (r < 20) {
+            let c = 0;
+            while (c < 10) {
+                do drawCell(c, r, ~(board[(r * 10) + c] = 0));
+                let c = c + 1;
+            }
+            let r = r + 1;
+        }
+        return;
+    }
+
+    // bc/br = board column/row (0-indexed); fill=true → black, false → white
+    method void drawCell(int bc, int br, boolean fill) {
+        var int px, py;
+        let px = 20 + (bc * 10);
+        let py = 28 + (br * 10);
+        do Screen.setColor(fill);
+        do Screen.drawRectangle(px, py, px + 8, py + 8);
+        return;
+    }
+
+    method void drawPiece(boolean visible) {
+        var int row, col, sh, bit;
+        let sh  = shapes[(pieceType * 4) + pieceRot];
+        let row = 0;
+        while (row < 4) {
+            let col = 0;
+            while (col < 4) {
+                let bit = pow2[(row * 4) + col];
+                if (~((sh & bit) = 0)) {
+                    if ((pieceY + row) > -1) {
+                        do drawCell(pieceX + col, pieceY + row, visible);
+                    }
+                }
+                let col = col + 1;
+            }
+            let row = row + 1;
+        }
+        return;
+    }
+
+    method void drawSidebar() {
+        var int sh, row, col, bit, px, py;
+
+        // title
+        do Output.moveCursor(0, 17);
+        do Output.printString("TETRIS");
+
+        // NEXT preview
+        do Output.moveCursor(3, 17);
+        do Output.printString("NEXT:");
+        do Screen.setColor(false);
+        do Screen.drawRectangle(130, 40, 165, 75);
+        let sh  = shapes[nextType * 4];
+        let row = 0;
+        while (row < 4) {
+            let col = 0;
+            while (col < 4) {
+                let bit = pow2[(row * 4) + col];
+                if (~((sh & bit) = 0)) {
+                    let px = 130 + (col * 8);
+                    let py = 40  + (row * 8);
+                    do Screen.setColor(true);
+                    do Screen.drawRectangle(px, py, px + 7, py + 7);
+                }
+                let col = col + 1;
+            }
+            let row = row + 1;
+        }
+
+        // score
+        do Output.moveCursor(9, 17);
+        do Output.printString("SCORE:");
+        do Screen.setColor(false);
+        do Screen.drawRectangle(130, 107, 210, 119);
+        do Output.moveCursor(10, 17);
+        do Output.printInt(score);
+
+        // level
+        do Output.moveCursor(12, 17);
+        do Output.printString("LEVEL:");
+        do Screen.setColor(false);
+        do Screen.drawRectangle(130, 140, 180, 152);
+        do Output.moveCursor(13, 17);
+        do Output.printInt(level);
+
+        // lines
+        do Output.moveCursor(15, 17);
+        do Output.printString("LINES:");
+        do Screen.setColor(false);
+        do Screen.drawRectangle(130, 173, 180, 185);
+        do Output.moveCursor(16, 17);
+        do Output.printInt(lines);
+
+        return;
+    }
+
+    method void dispose() {
+        do board.dispose();
+        do shapes.dispose();
+        do pow2.dispose();
+        do Memory.deAlloc(this);
+        return;
+    }
+}
