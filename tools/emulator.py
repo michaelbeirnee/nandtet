@@ -16,16 +16,14 @@ game); pass strict_rom=True to emulate the hardware limit exactly.
 from pathlib import Path
 
 WORD = 0xFFFF
-SCREEN_BASE = 0x4000          # 16384
-SCREEN_WORDS = 0x2000         # 8192  (256 rows x 32 words)
-KBD = 0x6000                  # 24576
+SCREEN_BASE = 0x4000
+SCREEN_WORDS = 0x2000
+KBD = 0x6000
 SCREEN_W, SCREEN_H = 512, 256
-
 
 def _signed(v: int) -> int:
     """Interpret a 16-bit word as signed two's complement."""
     return v - 0x10000 if v & 0x8000 else v
-
 
 def _alu(x: int, y: int, zx, nx, zy, ny, f, no) -> int:
     """The Hack ALU: six control bits over two 16-bit inputs."""
@@ -37,17 +35,14 @@ def _alu(x: int, y: int, zx, nx, zy, ny, f, no) -> int:
     if no: out = ~out
     return out & WORD
 
-
 class CPU:
     def __init__(self, rom, strict_rom: bool = False):
         if strict_rom and len(rom) > 0x8000:
             raise ValueError(f'image of {len(rom)} words exceeds 32K Hack ROM')
         self.rom = rom
-        self.ram = [0] * 0x6001          # through the keyboard word
+        self.ram = [0] * 0x6001
         self.a = self.d = self.pc = 0
         self.cycles = 0
-
-    # ── memory helpers ─────────────────────────────────────────────────────────
 
     def peek(self, addr: int) -> int:
         return self.ram[addr]
@@ -59,20 +54,17 @@ class CPU:
         """Set the keyboard scan code (0 = no key)."""
         self.ram[KBD] = code & WORD
 
-    # ── execution ──────────────────────────────────────────────────────────────
-
     def step(self):
         if self.pc >= len(self.rom):
             return False
         instr = self.rom[self.pc]
         self.cycles += 1
 
-        if not (instr & 0x8000):              # @value  (A-instruction)
+        if not (instr & 0x8000):
             self.a = instr & WORD
             self.pc += 1
             return True
 
-        # C-instruction: 111 a c1c2c3c4c5c6 d1d2d3 j1j2j3
         a  = (instr >> 12) & 1
         c  = (instr >> 6) & 0x3F
         d  = (instr >> 3) & 0x7
@@ -83,11 +75,11 @@ class CPU:
                    c >> 5 & 1, c >> 4 & 1, c >> 3 & 1,
                    c >> 2 & 1, c >> 1 & 1, c & 1)
 
-        if d & 0b001:                          # M = out  (uses current A)
+        if d & 0b001:
             self.poke(self.a, out)
-        if d & 0b010:                          # D = out
+        if d & 0b010:
             self.d = out
-        if d & 0b100:                          # A = out
+        if d & 0b100:
             self.a = out
 
         s = _signed(out)
@@ -106,8 +98,6 @@ class CPU:
                 break
         return n
 
-    # ── screen ─────────────────────────────────────────────────────────────────
-
     def screen_rows(self):
         """Yield 256 rows, each a list of 512 ints (0/1), MSB-of-word = leftmost."""
         for r in range(SCREEN_H):
@@ -115,18 +105,14 @@ class CPU:
             base = SCREEN_BASE + r * 32
             for w in range(32):
                 word = self.ram[base + w]
-                for bit in range(16):           # Hack draws bit 0 as the left pixel
+                for bit in range(16):
                     row.append((word >> bit) & 1)
             yield row
-
 
 def load_hack(path) -> list:
     """Read a .hack file (one 16-bit binary string per line) into a word list."""
     text = Path(path).read_text().split()
     return [int(line, 2) for line in text if line]
-
-
-# ── ascii rendering (for headless inspection / terminal play) ────────────────────
 
 def render_ascii(cpu: CPU, cols: int = 64, rows: int = 32) -> str:
     """Downsample the screen to an ASCII block grid for terminal display."""
@@ -141,7 +127,6 @@ def render_ascii(cpu: CPU, cols: int = 64, rows: int = 32) -> str:
             line.append('█' if on else ' ')
         out.append(''.join(line))
     return '\n'.join(out)
-
 
 def main():
     import argparse
@@ -165,7 +150,6 @@ def main():
             print(f'RAM[{addr}] = {cpu.peek(addr)} ({_signed(cpu.peek(addr))})')
     if args.screen:
         print(render_ascii(cpu))
-
 
 if __name__ == '__main__':
     main()

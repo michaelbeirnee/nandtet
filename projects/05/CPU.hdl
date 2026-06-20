@@ -1,42 +1,24 @@
 CHIP CPU {
-    IN  inM[16],          // M value (RAM[A])
-        instruction[16],  // fetched instruction
+    IN  inM[16],
+        instruction[16],
         reset;
-    OUT outM[16],         // value to write to M
-        writeM,           // whether to write to M
-        addressM[15],     // address in data memory
-        pc[15];           // address of next instruction
-
-    // Instruction encoding:
-    //   A-instruction: 0 v v v v v v v v v v v v v v v
-    //   C-instruction: 1 1 1 a c1c2c3c4c5c6 d1d2d3 j1j2j3
-    //
-    //   i[15]: 0=A-instr, 1=C-instr
-    //   i[12]: a-bit  — ALU y uses A (0) or M (1)
-    //   i[11..6]: ALU control (zx nx zy ny f no)
-    //   i[5]: d1 — write ALU result to A
-    //   i[4]: d2 — write ALU result to D
-    //   i[3]: d3 — write ALU result to M (writeM)
-    //   i[2]: j1 — jump if ng
-    //   i[1]: j2 — jump if zr
-    //   i[0]: j3 — jump if positive
+    OUT outM[16],
+        writeM,
+        addressM[15],
+        pc[15];
 
     PARTS:
     Not(in=instruction[15], out=isA);
 
-    // --- A register ---
-    // Load when: A-instruction, or C-instruction with d1 set
     And(a=instruction[15], b=instruction[5], out=cWriteA);
     Or(a=isA, b=cWriteA, out=loadA);
-    // A-instruction feeds raw instruction bits; C-instruction feeds ALU output
+
     Mux16(a=instruction, b=aluOut, sel=instruction[15], out=aIn);
     Register(in=aIn, load=loadA, out=aReg, out[0..14]=addressM);
 
-    // --- D register ---
     And(a=instruction[15], b=instruction[4], out=loadD);
     Register(in=aluOut, load=loadD, out=dReg);
 
-    // --- ALU ---
     Mux16(a=aReg, b=inM, sel=instruction[12], out=aluY);
     ALU(
         x=dReg,  y=aluY,
@@ -47,10 +29,8 @@ CHIP CPU {
         zr=zr, ng=ng
     );
 
-    // --- writeM ---
     And(a=instruction[15], b=instruction[3], out=writeM);
 
-    // --- jump logic ---
     Or(a=ng, b=zr, out=ngOrZr);
     Not(in=ngOrZr, out=pos);
     And(a=instruction[2], b=ng,  out=jNg);
@@ -58,8 +38,7 @@ CHIP CPU {
     And(a=instruction[0], b=pos, out=jPos);
     Or(a=jNg, b=jZr,  out=jNgZr);
     Or(a=jNgZr, b=jPos, out=jCond);
-    And(a=instruction[15], b=jCond, out=doJump); // jumps only on C-instructions
+    And(a=instruction[15], b=jCond, out=doJump);
 
-    // --- PC ---
     PC(in=aReg, load=doJump, inc=true, reset=reset, out[0..14]=pc);
 }

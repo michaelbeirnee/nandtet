@@ -8,8 +8,6 @@ import re
 import sys
 from pathlib import Path
 
-# ── tokenizer ─────────────────────────────────────────────────────────────────
-
 KEYWORDS = {
     'class', 'constructor', 'function', 'method', 'field', 'static',
     'var', 'int', 'char', 'boolean', 'void', 'true', 'false', 'null',
@@ -17,15 +15,14 @@ KEYWORDS = {
 }
 
 _TOKEN_RE = re.compile(
-    r'"[^"]*"'                     # string constant  (must come first)
-    r'|//[^\n]*'                   # line comment
-    r'|/\*.*?\*/'                  # block comment
-    r'|[{}()\[\].,;+\-*/&|<>=~]'  # single-char symbols
-    r'|\d+'                        # integer constant
-    r'|[A-Za-z_]\w*',             # identifier / keyword
+    r'"[^"]*"'
+    r'|//[^\n]*'
+    r'|/\*.*?\*/'
+    r'|[{}()\[\].,;+\-*/&|<>=~]'
+    r'|\d+'
+    r'|[A-Za-z_]\w*',
     re.DOTALL,
 )
-
 
 class Tokenizer:
     def __init__(self, src: str):
@@ -52,14 +49,10 @@ class Tokenizer:
     def peek_is(self, *vals) -> bool:
         return self.has_more() and self.peek() in vals
 
-
-# ── symbol table ──────────────────────────────────────────────────────────────
-
 _VM_SEG = {
     'static': 'static', 'field': 'this',
     'argument': 'argument', 'var': 'local',
 }
-
 
 class SymbolTable:
     def __init__(self):
@@ -89,14 +82,10 @@ class SymbolTable:
     def index_of(self, name: str) -> int:   return self._get(name)[2]
     def segment(self,  name: str) -> str:   return _VM_SEG[self.kind_of(name)]
 
-
-# ── compilation engine ────────────────────────────────────────────────────────
-
 _BINARY_OP = {
     '+': 'add', '-': 'sub', '&': 'and', '|': 'or',
     '<': 'lt',  '>': 'gt',  '=': 'eq',
 }
-
 
 class Compiler:
     def __init__(self, src: str, out: list):
@@ -112,8 +101,6 @@ class Compiler:
     def _emit(self, *lines):
         self._out.extend(lines)
 
-    # ── class ─────────────────────────────────────────────────────────────────
-
     def compile_class(self):
         t = self._tok
         t.expect('class')
@@ -127,24 +114,21 @@ class Compiler:
 
     def _class_var_dec(self):
         t = self._tok
-        kind = t.advance()       # static | field
+        kind = t.advance()
         typ  = t.advance()
         self._sym.define(t.advance(), typ, kind)
         while t.peek_is(','):
             t.advance(); self._sym.define(t.advance(), typ, kind)
         t.expect(';')
 
-    # ── subroutine ────────────────────────────────────────────────────────────
-
     def _subroutine(self):
         t = self._tok
-        kind = t.advance()       # constructor | function | method
-        t.advance()              # return type
+        kind = t.advance()
+        t.advance()
         name = t.advance()
         self._sym.start_subroutine()
 
         if kind == 'method':
-            # arg 0 is always 'this' for methods
             self._sym.define('this', self._cls, 'argument')
 
         t.expect('('); self._param_list(); t.expect(')')
@@ -179,8 +163,6 @@ class Compiler:
             t.advance(); self._sym.define(t.advance(), typ, 'var')
         t.expect(';')
 
-    # ── statements ────────────────────────────────────────────────────────────
-
     def _statements(self):
         dispatch = {
             'let': self._let, 'if': self._if, 'while': self._while,
@@ -205,7 +187,6 @@ class Compiler:
         t.expect('='); self._expression(); t.expect(';')
 
         if is_arr:
-            # stack: [... target_addr, value]
             self._emit('pop temp 0', 'pop pointer 1', 'push temp 0', 'pop that 0')
         else:
             self._emit(f'pop {self._sym.segment(name)} {self._sym.index_of(name)}')
@@ -244,19 +225,17 @@ class Compiler:
         self._tok.expect('do')
         self._subroutine_call()
         self._tok.expect(';')
-        self._emit('pop temp 0')   # void return value discarded
+        self._emit('pop temp 0')
 
     def _return(self):
         t = self._tok
         t.expect('return')
         if t.peek_is(';'):
-            self._emit('push constant 0')  # void
+            self._emit('push constant 0')
         else:
             self._expression()
         t.expect(';')
         self._emit('return')
-
-    # ── expressions ───────────────────────────────────────────────────────────
 
     def _expression(self):
         self._term()
@@ -299,7 +278,6 @@ class Compiler:
         else:
             name = t.advance()
             if t.peek_is('['):
-                # array read: push base + index, pop pointer 1, push that 0
                 t.advance()
                 self._emit(f'push {self._sym.segment(name)} {self._sym.index_of(name)}')
                 self._expression(); t.expect(']')
@@ -319,15 +297,12 @@ class Compiler:
             t.advance()
             method = t.advance()
             if self._sym.contains(first):
-                # instance.method(...)  — push object as arg 0
                 self._emit(f'push {self._sym.segment(first)} {self._sym.index_of(first)}')
                 n_args  = 1
                 callee  = f'{self._sym.type_of(first)}.{method}'
             else:
-                # ClassName.function(...)
                 callee = f'{first}.{method}'
         else:
-            # bare name(...)  — implicit this
             self._emit('push pointer 0')
             n_args = 1
             callee = f'{self._cls}.{first}'
@@ -345,16 +320,12 @@ class Compiler:
                 self._tok.advance(); self._expression(); n += 1
         return n
 
-
-# ── driver ────────────────────────────────────────────────────────────────────
-
 def compile_file(path: Path) -> Path:
     lines: list[str] = []
     Compiler(path.read_text(), lines).compile_class()
     out = path.with_suffix('.vm')
     out.write_text('\n'.join(lines) + '\n')
     return out
-
 
 def main():
     if len(sys.argv) != 2:
@@ -365,7 +336,6 @@ def main():
     for f in files:
         out = compile_file(f)
         print(f'{f} → {out}')
-
 
 if __name__ == '__main__':
     main()

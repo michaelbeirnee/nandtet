@@ -1,6 +1,3 @@
-// Screen: 512 wide × 256 tall, mapped to RAM[16384..24575].
-// Each row = 32 words; bit k of word w = pixel at column w*16+k.
-
 class Screen {
     static boolean black;
     static Array   screen;
@@ -54,16 +51,15 @@ class Screen {
         let b    = y1;
         let diff = 0;
 
-        if (dy = 0) {                           // horizontal
+        if (dy = 0) {
             do Screen.drawHLine(x1, x2, y1);
             return;
         }
-        if (dx = 0) {                           // vertical
+        if (dx = 0) {
             do Screen.drawVLine(x1, y1, y2);
             return;
         }
 
-        // Bresenham
         while ((~(a = x2)) | (~(b = y2))) {
             do Screen.drawPixel(a, b);
             if (diff < 0) {
@@ -78,7 +74,6 @@ class Screen {
         return;
     }
 
-    // Optimised horizontal run using full-word writes where possible
     function void drawHLine(int x1, int x2, int y) {
         var int lo, hi, addr, mask, i;
         if (x1 > x2) { let i = x1; let x1 = x2; let x2 = i; }
@@ -86,7 +81,7 @@ class Screen {
         let lo   = x1 / 16;
         let hi   = x2 / 16;
         if (lo = hi) {
-            // Same word: build a mask covering bits x1%16..x2%16
+
             let i = x1 & 15;
             while (~(i > (x2 & 15))) {
                 let mask = mask | pow2[i];
@@ -96,20 +91,20 @@ class Screen {
             else       { let screen[addr + lo] = screen[addr + lo] & (~mask); }
             return;
         }
-        // Left partial word
+
         let i = x1 & 15;
         let mask = 0;
         while (i < 16) { let mask = mask | pow2[i]; let i = i + 1; }
         if (black) { let screen[addr + lo] = screen[addr + lo] | mask; }
         else       { let screen[addr + lo] = screen[addr + lo] & (~mask); }
-        // Full words in between
+
         let lo = lo + 1;
         while (lo < hi) {
             if (black) { let screen[addr + lo] = -1; }
             else       { let screen[addr + lo] = 0;  }
             let lo = lo + 1;
         }
-        // Right partial word
+
         let i = 0; let mask = 0;
         while (~(i > (x2 & 15))) { let mask = mask | pow2[i]; let i = i + 1; }
         if (black) { let screen[addr + hi] = screen[addr + hi] | mask; }

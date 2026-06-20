@@ -7,9 +7,9 @@ class Keyboard {
 
     function char readChar() {
         var char c;
-        while (Keyboard.keyPressed() = 0) {}  // wait for press
+        while (Keyboard.keyPressed() = 0) {}
         let c = Keyboard.keyPressed();
-        while (~(Keyboard.keyPressed() = 0)) {}  // wait for release
+        while (~(Keyboard.keyPressed() = 0)) {}
         do Output.printChar(c);
         return c;
     }
@@ -21,11 +21,11 @@ class Keyboard {
         let line = String.new(64);
         while (true) {
             let c = Keyboard.readChar();
-            if (c = 128) {          // newLine
+            if (c = 128) {
                 do Output.println();
                 return line;
             }
-            if (c = 129) {          // backSpace
+            if (c = 129) {
                 if (line.length() > 0) {
                     do line.eraseLastChar();
                     do Output.backSpace();

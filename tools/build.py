@@ -23,7 +23,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 OS_DIR = ROOT / 'projects' / '12'
 
-
 def _load(name: str, relpath: str):
     """Import a module by file path (project folders aren't valid package names)."""
     spec = importlib.util.spec_from_file_location(name, ROOT / relpath)
@@ -31,11 +30,9 @@ def _load(name: str, relpath: str):
     spec.loader.exec_module(mod)
     return mod
 
-
 compiler  = _load('compiler',  'projects/10/compiler.py')
 vmtrans   = _load('vmtrans',   'projects/07/vm.py')
 assembler = _load('assembler', 'projects/06/assembler.py')
-
 
 def build(src_dir: Path, out_dir: Path, name: str, link_os: bool = True) -> Path:
     src_dir = Path(src_dir)
@@ -45,7 +42,6 @@ def build(src_dir: Path, out_dir: Path, name: str, link_os: bool = True) -> Path
         shutil.rmtree(stage)
     stage.mkdir(parents=True)
 
-    # 1. gather Jack sources (game + OS) into one directory
     jacks = sorted(src_dir.glob('*.jack'))
     if not jacks:
         sys.exit(f'no .jack files in {src_dir}')
@@ -59,13 +55,11 @@ def build(src_dir: Path, out_dir: Path, name: str, link_os: bool = True) -> Path
     for jack in sorted(stage.glob('*.jack')):
         compiler.compile_file(jack)
 
-    # 2. translate the whole directory to one .asm (with Sys.init bootstrap)
     print('[2/3] translating VM → assembly')
     asm = vmtrans.translate(stage)
     asm_out = out_dir / f'{name}.asm'
     shutil.move(str(asm), asm_out)
 
-    # 3. assemble to a Hack binary
     print('[3/3] assembling → Hack binary')
     hack_out = out_dir / f'{name}.hack'
     hack_out.write_text(assembler.assemble(asm_out))
@@ -76,7 +70,6 @@ def build(src_dir: Path, out_dir: Path, name: str, link_os: bool = True) -> Path
         print(f'  note: {n} > 32768 — exceeds the real Hack 32K ROM; runs under '
               f'the emulator (non-strict ROM) only.')
     return hack_out
-
 
 def main():
     ap = argparse.ArgumentParser(description='Build a Jack program to a .hack image.')
@@ -93,7 +86,6 @@ def main():
     name = args.name or ('Tetris' if src.name == '09' else src.name)
     out = build(src, Path(args.out), name, link_os=not args.no_os)
     print(f'\nRun it:  python3 tools/emulator.py {out} --screen')
-
 
 if __name__ == '__main__':
     main()

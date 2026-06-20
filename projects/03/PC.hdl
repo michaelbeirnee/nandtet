@@ -2,8 +2,6 @@ CHIP PC {
     IN in[16], load, inc, reset;
     OUT out[16];
 
-    // Priority (highest first): reset > load > inc > hold
-    // Register always latches; we compute what to latch via a mux chain.
     PARTS:
     Register(in=next, load=true, out=cur, out=out);
     Inc16(in=cur, out=curPlus1);

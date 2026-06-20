@@ -9,19 +9,16 @@ import sys
 from pathlib import Path
 
 SEG_BASE = {'local': 'LCL', 'argument': 'ARG', 'this': 'THIS', 'that': 'THAT'}
-TEMP_BASE = 5   # temp  → R5-R12
-PTR_BASE  = 3   # pointer 0/1 → THIS/THAT (R3/R4)
-
+TEMP_BASE = 5
+PTR_BASE  = 3
 
 class CodeGen:
     def __init__(self):
         self._uid = 0
-        self.function = ''   # current function scope for label/goto
+        self.function = ''
 
     def _n(self) -> int:
         n = self._uid; self._uid += 1; return n
-
-    # ── stack primitives ───────────────────────────────────────────────────────
 
     @staticmethod
     def _push_d() -> list:
@@ -30,8 +27,6 @@ class CodeGen:
     @staticmethod
     def _pop_d() -> list:
         return ['@SP', 'AM=M-1', 'D=M']
-
-    # ── arithmetic / logic ─────────────────────────────────────────────────────
 
     def arith(self, cmd: str) -> list:
         simple = {
@@ -51,16 +46,14 @@ class CodeGen:
         n = self._n()
         t, e = f'CMP_T_{n}', f'CMP_E_{n}'
         return [
-            '@SP', 'AM=M-1', 'D=M',     # pop y
-            'A=A-1', 'D=M-D',            # D = x - y
+            '@SP', 'AM=M-1', 'D=M',
+            'A=A-1', 'D=M-D',
             f'@{t}', f'D;{jmp}',
-            '@SP', 'A=M-1', 'M=0',       # false
+            '@SP', 'A=M-1', 'M=0',
             f'@{e}', '0;JMP',
-            f'({t})', '@SP', 'A=M-1', 'M=-1',  # true
+            f'({t})', '@SP', 'A=M-1', 'M=-1',
             f'({e})',
         ]
-
-    # ── memory access ──────────────────────────────────────────────────────────
 
     def push(self, seg: str, i: int, fname: str) -> list:
         if seg == 'constant':
@@ -79,7 +72,6 @@ class CodeGen:
     def pop(self, seg: str, i: int, fname: str) -> list:
         if seg in SEG_BASE:
             base = SEG_BASE[seg]
-            # store target address in R13, then pop into it
             return [
                 f'@{i}', 'D=A', f'@{base}', 'D=D+M', '@R13', 'M=D',
                 '@SP', 'AM=M-1', 'D=M', '@R13', 'A=M', 'M=D',
@@ -88,8 +80,6 @@ class CodeGen:
         if seg == 'pointer': return self._pop_d() + [f'@{PTR_BASE + i}', 'M=D']
         if seg == 'static':  return self._pop_d() + [f'@{fname}.{i}', 'M=D']
         raise ValueError(f'unknown segment: {seg}')
-
-    # ── program flow ───────────────────────────────────────────────────────────
 
     def label(self, lbl: str) -> list:
         return [f'({self.function}${lbl})']
@@ -100,11 +90,8 @@ class CodeGen:
     def if_goto(self, lbl: str) -> list:
         return self._pop_d() + [f'@{self.function}${lbl}', 'D;JNE']
 
-    # ── functions ──────────────────────────────────────────────────────────────
-
     def function_decl(self, name: str, n_vars: int) -> list:
         self.function = name
-        # initialise n_vars locals to 0
         init = []
         for _ in range(n_vars):
             init += ['@SP', 'A=M', 'M=0', '@SP', 'M=M+1']
@@ -114,40 +101,30 @@ class CodeGen:
         n = self._n()
         ret = f'{name}$ret.{n}'
         return [
-            # push return address
             f'@{ret}',  'D=A',  '@SP', 'A=M', 'M=D', '@SP', 'M=M+1',
-            # push caller's frame
             '@LCL',  'D=M', '@SP', 'A=M', 'M=D', '@SP', 'M=M+1',
             '@ARG',  'D=M', '@SP', 'A=M', 'M=D', '@SP', 'M=M+1',
             '@THIS', 'D=M', '@SP', 'A=M', 'M=D', '@SP', 'M=M+1',
             '@THAT', 'D=M', '@SP', 'A=M', 'M=D', '@SP', 'M=M+1',
-            # ARG = SP - nArgs - 5
             '@SP', 'D=M', f'@{n_args + 5}', 'D=D-A', '@ARG', 'M=D',
-            # LCL = SP
             '@SP', 'D=M', '@LCL', 'M=D',
-            # jump to callee, plant return label
             f'@{name}', '0;JMP',
             f'({ret})',
         ]
 
     def return_cmd(self) -> list:
-        # R14 = FRAME (LCL), R15 = return address (RAM[FRAME-5])
-        # Walk R14 backwards through THAT/THIS/ARG/LCL
         return [
-            '@LCL', 'D=M', '@R14', 'M=D',          # FRAME = LCL
-            '@5', 'A=D-A', 'D=M', '@R15', 'M=D',   # RET   = RAM[FRAME-5]
-            '@SP', 'AM=M-1', 'D=M',                  # pop return value
-            '@ARG', 'A=M', 'M=D',                    # RAM[ARG] = retval
-            '@ARG', 'D=M+1', '@SP', 'M=D',          # SP = ARG+1
+            '@LCL', 'D=M', '@R14', 'M=D',
+            '@5', 'A=D-A', 'D=M', '@R15', 'M=D',
+            '@SP', 'AM=M-1', 'D=M',
+            '@ARG', 'A=M', 'M=D',
+            '@ARG', 'D=M+1', '@SP', 'M=D',
             '@R14', 'AM=M-1', 'D=M', '@THAT', 'M=D',
             '@R14', 'AM=M-1', 'D=M', '@THIS', 'M=D',
             '@R14', 'AM=M-1', 'D=M', '@ARG',  'M=D',
             '@R14', 'AM=M-1', 'D=M', '@LCL',  'M=D',
             '@R15', 'A=M', '0;JMP',
         ]
-
-
-# ── file translator ────────────────────────────────────────────────────────────
 
 def translate_file(path: Path, gen: CodeGen) -> list:
     out = [f'// === {path.name} ===']
@@ -183,7 +160,6 @@ def translate_file(path: Path, gen: CodeGen) -> list:
 
     return out
 
-
 def translate(target: Path) -> Path:
     gen = CodeGen()
     lines: list = []
@@ -192,7 +168,6 @@ def translate(target: Path) -> Path:
         vm_files = sorted(target.glob('*.vm'))
         if not vm_files:
             raise FileNotFoundError(f'no .vm files in {target}')
-        # bootstrap: SP=256, call Sys.init 0
         lines += ['// bootstrap', '@256', 'D=A', '@SP', 'M=D']
         lines += gen.call('Sys.init', 0)
         for f in vm_files:
@@ -205,9 +180,6 @@ def translate(target: Path) -> Path:
     out_path.write_text('\n'.join(lines) + '\n')
     return out_path
 
-
-# ── entry point ────────────────────────────────────────────────────────────────
-
 def main():
     if len(sys.argv) != 2:
         print(f'usage: {sys.argv[0]} <file.vm | directory/>')
@@ -218,7 +190,6 @@ def main():
         sys.exit(1)
     out = translate(target)
     print(f'→ {out}')
-
 
 if __name__ == '__main__':
     main()

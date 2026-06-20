@@ -6,7 +6,7 @@ class String {
     constructor String new(int maxLen) {
         if (maxLen < 0) { do Sys.error(14); }
         let cap = maxLen;
-        if (maxLen = 0) { let maxLen = 1; }  // avoid zero-length Array.new
+        if (maxLen = 0) { let maxLen = 1; }
         let buf = Array.new(maxLen);
         let len = 0;
         return this;
@@ -62,7 +62,7 @@ class String {
 
     method void setInt(int n) {
         let len = 0;
-        if (n < 0) { do appendChar(45); let n = -n; }  // '-'
+        if (n < 0) { do appendChar(45); let n = -n; }
         do setIntRec(n);
         return;
     }

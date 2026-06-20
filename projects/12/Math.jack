@@ -1,5 +1,5 @@
 class Math {
-    static Array pow2;   // pow2[i] = 2^i for i in 0..15
+    static Array pow2;
 
     function void init() {
         var int i;
@@ -43,7 +43,6 @@ class Math {
         return result;
     }
 
-    // Recursive positive-integer division; y < 0 detects overflow.
     function int divPos(int x, int y) {
         var int q, r;
         if ((y > x) | (y < 0)) { return 0; }
@@ -71,7 +70,7 @@ class Math {
         while (~(j < 0)) {
             let t = y + pow2[j];
             let t = t * t;
-            // t > 0 guards against overflow wrapping to negative
+
             if ((~(t > x)) & (t > 0)) {
                 let y = y + pow2[j];
             }

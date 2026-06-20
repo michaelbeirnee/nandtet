@@ -1,53 +1,47 @@
-// Fill.asm — keyboard-driven screen fill
-// Polls the keyboard in an infinite loop.
-// Key pressed  → fill entire screen black (all 1s)
-// No key       → fill entire screen white (all 0s)
-// Screen is 256 rows × 32 words = 8192 words starting at SCREEN (16384).
-
 (MAINLOOP)
     @KBD
     D=M
     @SETWHITE
-    D;JEQ           // no key pressed
+    D;JEQ
 
 (SETBLACK)
     @color
-    M=-1            // 0xFFFF — all pixels on
+    M=-1
     @DRAW
     0;JMP
 
 (SETWHITE)
     @color
-    M=0             // all pixels off
+    M=0
 
 (DRAW)
     @SCREEN
     D=A
     @addr
-    M=D             // addr = start of screen
+    M=D
 
     @8192
     D=A
     @n
-    M=D             // n = number of words to fill
+    M=D
 
 (FILLLOOP)
     @n
     D=M
     @MAINLOOP
-    D;JLE           // filled all words — poll again
+    D;JLE
 
     @color
     D=M
     @addr
     A=M
-    M=D             // RAM[addr] = color
+    M=D
 
     @addr
-    M=M+1           // advance pointer
+    M=M+1
 
     @n
-    M=M-1           // one fewer word to fill
+    M=M-1
 
     @FILLLOOP
     0;JMP

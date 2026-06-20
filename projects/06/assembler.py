@@ -5,15 +5,12 @@ import re
 import sys
 from pathlib import Path
 
-# ── tables ────────────────────────────────────────────────────────────────────
-
 PREDEFINED = {
     'SP': 0, 'LCL': 1, 'ARG': 2, 'THIS': 3, 'THAT': 4,
     'SCREEN': 16384, 'KBD': 24576,
     **{f'R{i}': i for i in range(16)},
 }
 
-# comp mnemonic → (a-bit, cccccc)
 COMP = {
     '0':   ('0', '101010'), '1':   ('0', '111111'), '-1':  ('0', '111010'),
     'D':   ('0', '001100'), 'A':   ('0', '110000'), '!D':  ('0', '001101'),
@@ -37,8 +34,6 @@ JUMP = {
     'JLT': '100', 'JNE': '101', 'JLE': '110', 'JMP': '111',
 }
 
-# ── assembler ─────────────────────────────────────────────────────────────────
-
 def clean(line: str) -> str:
     return re.sub(r'//.*', '', line).strip()
 
@@ -46,7 +41,6 @@ def assemble(src: Path) -> str:
     lines = [clean(l) for l in src.read_text().splitlines()]
     lines = [l for l in lines if l]
 
-    # Pass 1: collect label symbols (labels don't emit instructions)
     symbols = dict(PREDEFINED)
     ic = 0
     for line in lines:
@@ -55,7 +49,6 @@ def assemble(src: Path) -> str:
         else:
             ic += 1
 
-    # Pass 2: translate
     next_var = 16
     output: list[str] = []
 
@@ -87,8 +80,6 @@ def assemble(src: Path) -> str:
             output.append(f'111{a}{cccccc}{DEST[dest]}{JUMP[jump]}')
 
     return '\n'.join(output) + '\n'
-
-# ── entry point ───────────────────────────────────────────────────────────────
 
 def main():
     if len(sys.argv) < 2:

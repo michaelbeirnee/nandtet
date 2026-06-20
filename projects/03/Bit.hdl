@@ -2,8 +2,6 @@ CHIP Bit {
     IN in, load;
     OUT out;
 
-    // Mux selects whether to latch new input or recirculate current value.
-    // DFF closes the loop with a 1-cycle delay, making it non-combinational.
     PARTS:
     Mux(a=stored, b=in, sel=load, out=next);
     DFF(in=next, out=stored, out=out);

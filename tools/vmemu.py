@@ -27,10 +27,8 @@ WORD = 0xFFFF
 _PTR = {0: THIS, 1: THAT}
 _SEG_REG = {'local': LCL, 'argument': ARG, 'this': THIS, 'that': THAT}
 
-
 def _signed(v):
     return v - 0x10000 if v & 0x8000 else v
-
 
 class Instr:
     __slots__ = ('op', 'arg1', 'arg2', 'func', 'file')
@@ -38,25 +36,21 @@ class Instr:
     def __init__(self, op, arg1, arg2, func, file):
         self.op, self.arg1, self.arg2, self.func, self.file = op, arg1, arg2, func, file
 
-
 class VMEmulator:
     def __init__(self, vm_files):
         self.ram = [0] * (KBD + 1)
         self.ram[SP] = 256
         self.code = []
-        self.functions = {}          # name → index of its first instruction
-        self.labels = {}             # (func, label) → index
-        self.statics = {}            # (file, i) → ram address
+        self.functions = {}
+        self.labels = {}
+        self.statics = {}
         self._next_static = 16
         self.halted = False
         self._load(vm_files)
         self.pc = self.functions.get('Sys.init')
         if self.pc is None:
             raise ValueError('no Sys.init found in VM files')
-        # establish Sys.init's frame as if bootstrapped: call Sys.init 0
         self._enter('Sys.init', 0, return_pc=None)
-
-    # ── loading / parsing ───────────────────────────────────────────────────────
 
     def _load(self, vm_files):
         cur_func = ''
@@ -86,8 +80,6 @@ class VMEmulator:
             self._next_static += 1
         return self.statics[key]
 
-    # ── stack helpers ───────────────────────────────────────────────────────────
-
     def _push(self, v):
         self.ram[self.ram[SP]] = v & WORD
         self.ram[SP] += 1
@@ -96,20 +88,14 @@ class VMEmulator:
         self.ram[SP] -= 1
         return self.ram[self.ram[SP]]
 
-    # ── call / return ───────────────────────────────────────────────────────────
-
     def _enter(self, name, n_args, return_pc):
-        # save caller frame
         self._push(return_pc if return_pc is not None else 0xFFFF)
         for reg in (LCL, ARG, THIS, THAT):
             self._push(self.ram[reg])
         self.ram[ARG] = self.ram[SP] - 5 - n_args
         self.ram[LCL] = self.ram[SP]
         target = self.functions[name]
-        # function decl line initialises locals; jump just past it and run them
         self.pc = target
-
-    # ── single step ─────────────────────────────────────────────────────────────
 
     def step(self):
         if self.halted or self.pc is None or self.pc >= len(self.code):
@@ -139,7 +125,7 @@ class VMEmulator:
             self.ram[THIS] = self.ram[frame - 2]
             self.ram[ARG] = self.ram[frame - 3]
             self.ram[LCL] = self.ram[frame - 4]
-            if ret == 0xFFFF:            # returned out of Sys.init → stop
+            if ret == 0xFFFF:
                 self.halted = True
                 return False
             self.pc = ret
@@ -158,8 +144,6 @@ class VMEmulator:
 
         self.pc = nxt
         return True
-
-    # ── segments ────────────────────────────────────────────────────────────────
 
     def _load_seg(self, seg, i, file):
         if seg == 'constant':
@@ -186,8 +170,6 @@ class VMEmulator:
             self.ram[self._static_addr(file, i)] = val
         else:
             raise ValueError(f'bad segment {seg}')
-
-    # ── arithmetic ──────────────────────────────────────────────────────────────
 
     def _arith(self, op):
         r = self.ram
@@ -216,8 +198,6 @@ class VMEmulator:
             n += 1
         return n
 
-    # ── display interface (matches CPU emulator) ────────────────────────────────
-
     def set_key(self, code):
         self.ram[KBD] = code & WORD
 
@@ -234,14 +214,12 @@ class VMEmulator:
                     row.append((word >> bit) & 1)
             yield row
 
-
 def load_dir(path):
     path = Path(path)
     files = sorted(path.glob('*.vm')) if path.is_dir() else [path]
     if not files:
         raise FileNotFoundError(f'no .vm files in {path}')
     return files
-
 
 def main():
     import argparse
@@ -257,7 +235,6 @@ def main():
     print(f'ran {ran} VM steps (halted={emu.halted})')
     if args.screen:
         print(render_ascii(emu))
-
 
 if __name__ == '__main__':
     main()
